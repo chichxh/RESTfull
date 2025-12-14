@@ -9,17 +9,17 @@ namespace RESTfull.Domain.Entities
     {
         public int Id { get; set; }
 
-        public string RoleType { get; set; }
+        public string RoleType { get; set; } = string.Empty;
 
         public int PersonId { get; set; }
         [ForeignKey(nameof(PersonId))]
-        public virtual Person Person { get; set; }
+        public virtual Person? Person { get; set; }
 
-        public string Title { get; set; }
-        public string Description { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
 
         public AreaType AreaType { get; set; }
-        public string AreaIndex { get; set; }
+        public string AreaIndex { get; set; } = string.Empty;
 
         public void Validate()
         {

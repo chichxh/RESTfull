@@ -1,0 +1,205 @@
+@using System.Linq.Expressions
+@using RESTfull.Domain.Entities
+
+<div class="conference-list">
+    <div class="mb-3">
+        <div class="row">
+            <div class="col-md-6">
+                <input type="text" class="form-control" placeholder="Поиск по названию, индексу или описанию..." 
+                       @bind="searchText" @bind:event="oninput" />
+            </div>
+            <div class="col-md-3">
+                <select class="form-select" @bind="filterVenueId">
+                    <option value="">Все площадки</option>
+                    @if (venues != null)
+                    {
+                        @foreach (var venue in venues)
+                        {
+                            <option value="@venue.Id">@venue.Name</option>
+                        }
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select class="form-select" @bind="sortBy">
+                    <option value="name">Сортировка: По названию</option>
+                    <option value="date">Сортировка: По дате начала</option>
+                    <option value="index">Сортировка: По индексу</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    @if (FilteredConferences == null || !FilteredConferences.Any())
+    {
+        <div class="alert alert-info">
+            @if (Conferences == null || !Conferences.Any())
+            {
+                <p>Конференции не найдены.</p>
+            }
+            else
+            {
+                <p>По вашему запросу ничего не найдено.</p>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th style="cursor: pointer;" @onclick="() => SortByColumn(IndexColumnName)">
+                            Индекс @GetSortIcon(IndexColumnName)
+                        </th>
+                        <th style="cursor: pointer;" @onclick="() => SortByColumn(NameColumnName)">
+                            Название @GetSortIcon(NameColumnName)
+                        </th>
+                        <th>Описание</th>
+                        <th style="cursor: pointer;" @onclick="() => SortByColumn(StartTimeColumnName)">
+                            Дата начала @GetSortIcon(StartTimeColumnName)
+                        </th>
+                        <th>Дата окончания</th>
+                        <th>Площадка</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var conference in FilteredConferences)
+                    {
+                        <tr>
+                            <td>@conference.Index</td>
+                            <td><strong>@conference.Name</strong></td>
+                            <td>@(conference.Description?.Length > 50 ? conference.Description.Substring(0, 50) + "..." : conference.Description)</td>
+                            <td>@(conference.StartTime?.ToString("dd.MM.yyyy HH:mm") ?? "Не указано")</td>
+                            <td>@(conference.EndTime?.ToString("dd.MM.yyyy HH:mm") ?? "Не указано")</td>
+                            <td>@(conference.Venue?.Name ?? "Не указано")</td>
+                            <td>
+                                @if (OnView.HasDelegate)
+                                {
+                                    <button class="btn btn-sm btn-info" @onclick="() => OnView.InvokeAsync(conference)">Просмотр</button>
+                                }
+                                @if (OnEdit.HasDelegate)
+                                {
+                                    <button class="btn btn-sm btn-primary" @onclick="() => OnEdit.InvokeAsync(conference)">Редактировать</button>
+                                }
+                                @if (OnDelete.HasDelegate)
+                                {
+                                    <button class="btn btn-sm btn-danger" @onclick="() => OnDelete.InvokeAsync(conference)">Удалить</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="mt-2">
+            <small class="text-muted">Найдено: @FilteredConferences.Count() из @(Conferences?.Count() ?? 0)</small>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public IEnumerable<Conference> Conferences { get; set; } = Enumerable.Empty<Conference>();
+
+    [Parameter]
+    public IEnumerable<Venue> Venues { get; set; } = Enumerable.Empty<Venue>();
+
+    [Parameter]
+    public EventCallback<Conference> OnView { get; set; }
+
+    [Parameter]
+    public EventCallback<Conference> OnEdit { get; set; }
+
+    [Parameter]
+    public EventCallback<Conference> OnDelete { get; set; }
+
+    private string searchText = string.Empty;
+    private int? filterVenueId;
+    private string sortBy = "name";
+    private string currentSortColumn = string.Empty;
+    private bool sortAscending = true;
+
+    private const string IndexColumnName = "Index";
+    private const string NameColumnName = "Name";
+    private const string StartTimeColumnName = "StartTime";
+
+    private IEnumerable<Venue> venues => Venues ?? Enumerable.Empty<Venue>();
+
+    private IEnumerable<Conference> FilteredConferences
+    {
+        get
+        {
+            if (Conferences == null) return Enumerable.Empty<Conference>();
+
+            var filtered = Conferences.AsEnumerable();
+
+            // Поиск по тексту
+            if (!string.IsNullOrWhiteSpace(searchText))
+            {
+                var searchLower = searchText.ToLower();
+                filtered = filtered.Where(c =>
+                    (c.Name?.ToLower().Contains(searchLower) ?? false) ||
+                    (c.Index?.ToLower().Contains(searchLower) ?? false) ||
+                    (c.Description?.ToLower().Contains(searchLower) ?? false)
+                );
+            }
+
+            // Фильтр по площадке
+            if (filterVenueId.HasValue && filterVenueId.Value > 0)
+            {
+                filtered = filtered.Where(c => c.VenueId == filterVenueId.Value);
+            }
+
+            // Сортировка
+            filtered = sortBy switch
+            {
+                "name" => filtered.OrderBy(c => c.Name),
+                "date" => filtered.OrderBy(c => c.StartTime ?? DateTime.MaxValue),
+                "index" => filtered.OrderBy(c => c.Index),
+                _ => filtered.OrderBy(c => c.Name)
+            };
+
+            // Дополнительная сортировка по клику на заголовок
+            if (!string.IsNullOrEmpty(currentSortColumn))
+            {
+                filtered = currentSortColumn switch
+                {
+                    IndexColumnName => sortAscending 
+                        ? filtered.OrderBy(c => c.Index) 
+                        : filtered.OrderByDescending(c => c.Index),
+                    NameColumnName => sortAscending 
+                        ? filtered.OrderBy(c => c.Name) 
+                        : filtered.OrderByDescending(c => c.Name),
+                    StartTimeColumnName => sortAscending 
+                        ? filtered.OrderBy(c => c.StartTime ?? DateTime.MaxValue) 
+                        : filtered.OrderByDescending(c => c.StartTime ?? DateTime.MinValue),
+                    _ => filtered
+                };
+            }
+
+            return filtered;
+        }
+    }
+
+    private void SortByColumn(string columnName)
+    {
+        if (currentSortColumn == columnName)
+        {
+            sortAscending = !sortAscending;
+        }
+        else
+        {
+            currentSortColumn = columnName;
+            sortAscending = true;
+        }
+    }
+
+    private string GetSortIcon(string columnName)
+    {
+        if (currentSortColumn != columnName) return "";
+        return sortAscending ? "↑" : "↓";
+    }
+}
+

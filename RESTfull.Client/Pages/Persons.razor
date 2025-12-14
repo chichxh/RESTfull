@@ -1,0 +1,367 @@
+@page "/persons"
+@inject IPersonService PersonService
+@inject IRoleService RoleService
+@inject IConferenceService ConferenceService
+@inject IDirectionService DirectionService
+@inject ISectionService SectionService
+
+<PageTitle>Управление персонами и ролями</PageTitle>
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2>Персоны</h2>
+                <button class="btn btn-success" @onclick="ShowAddPersonModal">
+                    <span>+</span> Добавить персону
+                </button>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2>Роли</h2>
+                <button class="btn btn-success" @onclick="ShowAddRoleModal">
+                    <span>+</span> Добавить роль
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            @if (persons == null)
+            {
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Загрузка...</span>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>ФИО</th>
+                                <th>Телефон</th>
+                                <th>Email</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var person in persons)
+                            {
+                                <tr>
+                                    <td>@person.Id</td>
+                                    <td><strong>@($"{person.LastName} {person.FirstName} {person.MiddleName}")</strong></td>
+                                    <td>@person.Phone</td>
+                                    <td>@person.Email</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-primary" @onclick="() => ShowEditPersonModal(person)">Редактировать</button>
+                                        <button class="btn btn-sm btn-danger" @onclick="() => ShowDeletePersonConfirm(person.Id)">Удалить</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+        <div class="col-md-6">
+            <RoleManagement Roles="@roles"
+                            Persons="@persons"
+                            OnView="@HandleViewRole"
+                            OnEdit="@ShowEditRoleModal"
+                            OnDelete="@HandleDeleteRole" />
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно для добавления/редактирования персоны -->
+@if (showPersonModal)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(isEditingPerson ? "Редактировать персону" : "Добавить персону")</h5>
+                    <button type="button" class="btn-close" @onclick="ClosePersonModal"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="@currentPerson" OnValidSubmit="@SavePerson">
+                        <DataAnnotationsValidator />
+                        <div class="mb-3">
+                            <label class="form-label">Фамилия *</label>
+                            <InputText class="form-control" @bind-Value="currentPerson.LastName" />
+                            <ValidationMessage For="@(() => currentPerson.LastName)" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Имя *</label>
+                            <InputText class="form-control" @bind-Value="currentPerson.FirstName" />
+                            <ValidationMessage For="@(() => currentPerson.FirstName)" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Отчество</label>
+                            <InputText class="form-control" @bind-Value="currentPerson.MiddleName" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Телефон</label>
+                            <InputText class="form-control" @bind-Value="currentPerson.Phone" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Альтернативный телефон</label>
+                            <InputText class="form-control" @bind-Value="currentPerson.PhoneAlt" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Email</label>
+                            <InputText type="email" class="form-control" @bind-Value="currentPerson.Email" />
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="ClosePersonModal">Отмена</button>
+                            <button type="submit" class="btn btn-primary">Сохранить</button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Модальное окно для добавления/редактирования роли -->
+@if (showRoleModal)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(isEditingRole ? "Редактировать роль" : "Добавить роль")</h5>
+                    <button type="button" class="btn-close" @onclick="CloseRoleModal"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="@currentRole" OnValidSubmit="@SaveRole">
+                        <DataAnnotationsValidator />
+                        <div class="mb-3">
+                            <label class="form-label">Персона *</label>
+                            <InputSelect class="form-select" @bind-Value="currentRole.PersonId">
+                                <option value="0">Выберите персону</option>
+                                @foreach (var person in persons)
+                                {
+                                    <option value="@person.Id">@($"{person.LastName} {person.FirstName} {person.MiddleName}")</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Тип роли *</label>
+                            <InputText class="form-control" @bind-Value="currentRole.RoleType" />
+                            <ValidationMessage For="@(() => currentRole.RoleType)" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Название</label>
+                            <InputText class="form-control" @bind-Value="currentRole.Title" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Описание</label>
+                            <InputTextArea class="form-control" @bind-Value="currentRole.Description" rows="3" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Тип области *</label>
+                            <InputSelect class="form-select" @bind-Value="currentRole.AreaType">
+                                <option value="@AreaType.Unknown">Не выбрано</option>
+                                <option value="@AreaType.Conference">Конференция</option>
+                                <option value="@AreaType.Direction">Направление</option>
+                                <option value="@AreaType.Section">Секция</option>
+                            </InputSelect>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Индекс области *</label>
+                            <InputText class="form-control" @bind-Value="currentRole.AreaIndex" placeholder="Например: 1, 2.1, 3.2.1" />
+                            <ValidationMessage For="@(() => currentRole.AreaIndex)" />
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="CloseRoleModal">Отмена</button>
+                            <button type="submit" class="btn btn-primary">Сохранить</button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Person>? persons;
+    private List<Role>? roles;
+    private Person currentPerson = new();
+    private Role currentRole = new();
+    private bool showPersonModal = false;
+    private bool showRoleModal = false;
+    private bool isEditingPerson = false;
+    private bool isEditingRole = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            persons = await PersonService.GetAllPersonsAsync();
+            roles = await RoleService.GetAllRolesAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка загрузки данных: {ex.Message}");
+            persons = new List<Person>();
+            roles = new List<Role>();
+        }
+    }
+
+    private void ShowAddPersonModal()
+    {
+        currentPerson = new Person();
+        isEditingPerson = false;
+        showPersonModal = true;
+    }
+
+    private void ShowEditPersonModal(Person person)
+    {
+        currentPerson = new Person
+        {
+            Id = person.Id,
+            FirstName = person.FirstName,
+            LastName = person.LastName,
+            MiddleName = person.MiddleName,
+            Phone = person.Phone,
+            PhoneAlt = person.PhoneAlt,
+            Email = person.Email
+        };
+        isEditingPerson = true;
+        showPersonModal = true;
+    }
+
+    private void ClosePersonModal()
+    {
+        showPersonModal = false;
+        currentPerson = new Person();
+    }
+
+    private async Task SavePerson()
+    {
+        try
+        {
+            if (isEditingPerson)
+            {
+                await PersonService.UpdatePersonAsync(currentPerson);
+            }
+            else
+            {
+                await PersonService.CreatePersonAsync(currentPerson);
+            }
+
+            ClosePersonModal();
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка сохранения: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Ошибка при сохранении персоны: {ex.Message}");
+        }
+    }
+
+    private async Task ShowDeletePersonConfirm(int id)
+    {
+        if (await JS.InvokeAsync<bool>("confirm", "Вы уверены, что хотите удалить эту персону?"))
+        {
+            try
+            {
+                await PersonService.DeletePersonAsync(id);
+                await LoadData();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка удаления: {ex.Message}");
+            }
+        }
+    }
+
+    private void ShowAddRoleModal()
+    {
+        currentRole = new Role { PersonId = 0, AreaType = AreaType.Unknown };
+        isEditingRole = false;
+        showRoleModal = true;
+    }
+
+    private void ShowEditRoleModal(Role role)
+    {
+        currentRole = new Role
+        {
+            Id = role.Id,
+            PersonId = role.PersonId,
+            RoleType = role.RoleType,
+            Title = role.Title,
+            Description = role.Description,
+            AreaType = role.AreaType,
+            AreaIndex = role.AreaIndex
+        };
+        isEditingRole = true;
+        showRoleModal = true;
+    }
+
+    private void CloseRoleModal()
+    {
+        showRoleModal = false;
+        currentRole = new Role();
+    }
+
+    private async Task SaveRole()
+    {
+        try
+        {
+            if (isEditingRole)
+            {
+                await RoleService.UpdateRoleAsync(currentRole);
+            }
+            else
+            {
+                await RoleService.CreateRoleAsync(currentRole);
+            }
+
+            CloseRoleModal();
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка сохранения: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Ошибка при сохранении роли: {ex.Message}");
+        }
+    }
+
+    private void HandleViewRole(Role role)
+    {
+        // Можно добавить детальный просмотр роли
+        Console.WriteLine($"Просмотр роли: {role.RoleType}");
+    }
+
+    private async Task HandleDeleteRole(Role role)
+    {
+        if (await JS.InvokeAsync<bool>("confirm", "Вы уверены, что хотите удалить эту роль?"))
+        {
+            try
+            {
+                await RoleService.DeleteRoleAsync(role.Id);
+                await LoadData();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка удаления: {ex.Message}");
+            }
+        }
+    }
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+}
+

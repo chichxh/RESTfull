@@ -1,0 +1,272 @@
+@page "/conferences"
+@using RESTfull.Domain.Entities
+@inject IConferenceService ConferenceService
+@inject IVenueService VenueService
+
+<PageTitle>Управление конференциями</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Управление конференциями</h2>
+        <button class="btn btn-success" @onclick="ShowAddModal">
+            <span>+</span> Добавить конференцию
+        </button>
+    </div>
+
+    @if (conferences != null && venues != null)
+    {
+        <ConferenceList Conferences="@conferences"
+                        Venues="@venues"
+                        OnView="@((Conference c) => HandleView(c))"
+                        OnEdit="@((Conference c) => ShowEditModal(c))"
+                        OnDelete="@((Conference c) => HandleDelete(c))" />
+    }
+    else
+    {
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Загрузка...</span>
+            </div>
+            <p class="mt-2">Загрузка данных...</p>
+        </div>
+    }
+</div>
+
+<!-- Модальное окно для добавления/редактирования -->
+@if (showModal)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(isEditing ? "Редактировать конференцию" : "Добавить конференцию")</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="@currentConference" OnValidSubmit="@SaveConference">
+                        <DataAnnotationsValidator />
+                        <div class="mb-3">
+                            <label class="form-label">Индекс</label>
+                            <InputText class="form-control" @bind-Value="currentConference.Index" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Название *</label>
+                            <InputText class="form-control" @bind-Value="currentConference.Name" />
+                            <ValidationMessage For="@(() => currentConference.Name)" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Описание</label>
+                            <InputTextArea class="form-control" @bind-Value="currentConference.Description" rows="3" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Дата начала</label>
+                            <InputDate class="form-control" @bind-Value="startDate" />
+                            <input type="time" class="form-control mt-2" value="@startTimeString" @onchange="(ChangeEventArgs e) => startTimeString = e.Value?.ToString() ?? string.Empty" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Дата окончания</label>
+                            <InputDate class="form-control" @bind-Value="endDate" />
+                            <input type="time" class="form-control mt-2" value="@endTimeString" @onchange="(ChangeEventArgs e) => endTimeString = e.Value?.ToString() ?? string.Empty" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Площадка</label>
+                            <select class="form-select" value="@(currentConference.VenueId?.ToString() ?? "0")" @onchange="@((ChangeEventArgs e) => { var val = e.Value?.ToString(); currentConference.VenueId = string.IsNullOrEmpty(val) || val == "0" ? null : int.Parse(val); })">
+                                <option value="0">Не выбрано</option>
+                                @if (venues != null)
+                                {
+                                    @foreach (var venue in venues)
+                                    {
+                                        <option value="@venue.Id">@venue.Name</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="CloseModal">Отмена</button>
+                            <button type="submit" class="btn btn-primary">Сохранить</button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Conference> conferences = new();
+    private List<Venue> venues = new();
+    private Conference currentConference = new();
+    private bool showModal = false;
+    private bool isEditing = false;
+    private DateTime? startDate;
+    private string startTimeString = string.Empty;
+    private DateTime? endDate;
+    private string endTimeString = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            conferences = await ConferenceService.GetAllConferencesAsync();
+            venues = await VenueService.GetAllVenuesAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка загрузки данных: {ex.Message}");
+            conferences = new List<Conference>();
+            venues = new List<Venue>();
+        }
+    }
+
+    private void ShowAddModal()
+    {
+        currentConference = new Conference();
+        startDate = null;
+        startTimeString = string.Empty;
+        endDate = null;
+        endTimeString = string.Empty;
+        isEditing = false;
+        showModal = true;
+    }
+
+    private Task ShowEditModal(Conference conference)
+    {
+        currentConference = new Conference
+        {
+            Id = conference.Id,
+            Index = conference.Index,
+            Name = conference.Name,
+            Description = conference.Description,
+            VenueId = conference.VenueId
+        };
+
+        if (conference.StartTime.HasValue)
+        {
+            startDate = conference.StartTime.Value.Date;
+            startTimeString = conference.StartTime.Value.ToString("HH:mm");
+        }
+        else
+        {
+            startDate = null;
+            startTimeString = string.Empty;
+        }
+
+        if (conference.EndTime.HasValue)
+        {
+            endDate = conference.EndTime.Value.Date;
+            endTimeString = conference.EndTime.Value.ToString("HH:mm");
+        }
+        else
+        {
+            endDate = null;
+            endTimeString = string.Empty;
+        }
+
+        isEditing = true;
+        showModal = true;
+        return Task.CompletedTask;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        currentConference = new Conference();
+    }
+
+    private async Task SaveConference()
+    {
+        try
+        {
+            if (startDate.HasValue && !string.IsNullOrWhiteSpace(startTimeString))
+            {
+                if (TimeSpan.TryParse(startTimeString, out var timeSpan))
+                {
+                    currentConference.StartTime = startDate.Value.Date.Add(timeSpan);
+                }
+            }
+            else
+            {
+                currentConference.StartTime = null;
+            }
+
+            if (endDate.HasValue && !string.IsNullOrWhiteSpace(endTimeString))
+            {
+                if (TimeSpan.TryParse(endTimeString, out var timeSpan))
+                {
+                    currentConference.EndTime = endDate.Value.Date.Add(timeSpan);
+                }
+            }
+            else
+            {
+                currentConference.EndTime = null;
+            }
+
+            // Убеждаемся, что VenueId корректно обработан (пустая строка или 0 -> null)
+            if (currentConference.VenueId == 0)
+            {
+                currentConference.VenueId = null;
+            }
+
+            // Очищаем навигационные свойства перед отправкой
+            var conferenceToSave = new Conference
+            {
+                Id = currentConference.Id,
+                Index = currentConference.Index,
+                Name = currentConference.Name,
+                Description = currentConference.Description,
+                StartTime = currentConference.StartTime,
+                EndTime = currentConference.EndTime,
+                VenueId = currentConference.VenueId,
+                Venue = null,
+                Directions = null
+            };
+
+            if (isEditing)
+            {
+                await ConferenceService.UpdateConferenceAsync(conferenceToSave);
+            }
+            else
+            {
+                await ConferenceService.CreateConferenceAsync(conferenceToSave);
+            }
+
+            CloseModal();
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка сохранения: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Ошибка при сохранении: {ex.Message}");
+        }
+    }
+
+    private async Task HandleView(Conference conference)
+    {
+        NavigationManager.NavigateTo($"/conferences/{conference.Id}");
+    }
+
+    private async Task HandleDelete(Conference conference)
+    {
+        if (await JS.InvokeAsync<bool>("confirm", "Вы уверены, что хотите удалить эту конференцию?"))
+        {
+            try
+            {
+                await ConferenceService.DeleteConferenceAsync(conference.Id);
+                await LoadData();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка удаления: {ex.Message}");
+            }
+        }
+    }
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+}
+

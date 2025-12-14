@@ -1,0 +1,193 @@
+@page "/venues"
+@inject IVenueService VenueService
+
+<PageTitle>Управление площадками</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Управление площадками</h2>
+        <button class="btn btn-success" @onclick="ShowAddModal">
+            <span>+</span> Добавить площадку
+        </button>
+    </div>
+
+    @if (venues == null)
+    {
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Загрузка...</span>
+            </div>
+            <p class="mt-2">Загрузка данных...</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Название</th>
+                        <th>Адрес</th>
+                        <th>Карта</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var venue in venues)
+                    {
+                        <tr>
+                            <td>@venue.Id</td>
+                            <td><strong>@venue.Name</strong></td>
+                            <td>@venue.Address</td>
+                            <td>
+                                @if (!string.IsNullOrEmpty(venue.MapUrl))
+                                {
+                                    <a href="@venue.MapUrl" target="_blank" class="btn btn-sm btn-outline-info">Открыть карту</a>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Не указано</span>
+                                }
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-primary" @onclick="() => ShowEditModal(venue)">Редактировать</button>
+                                <button class="btn btn-sm btn-danger" @onclick="() => ShowDeleteConfirm(venue.Id)">Удалить</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<!-- Модальное окно для добавления/редактирования -->
+@if (showModal)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(isEditing ? "Редактировать площадку" : "Добавить площадку")</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="@currentVenue" OnValidSubmit="@SaveVenue">
+                        <DataAnnotationsValidator />
+                        <div class="mb-3">
+                            <label class="form-label">Название *</label>
+                            <InputText class="form-control" @bind-Value="currentVenue.Name" />
+                            <ValidationMessage For="@(() => currentVenue.Name)" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Адрес</label>
+                            <InputText class="form-control" @bind-Value="currentVenue.Address" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">URL карты</label>
+                            <InputText class="form-control" @bind-Value="currentVenue.MapUrl" placeholder="https://..." />
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="CloseModal">Отмена</button>
+                            <button type="submit" class="btn btn-primary">Сохранить</button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Venue>? venues;
+    private Venue currentVenue = new();
+    private bool showModal = false;
+    private bool isEditing = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            venues = await VenueService.GetAllVenuesAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка загрузки данных: {ex.Message}");
+            venues = new List<Venue>();
+        }
+    }
+
+    private void ShowAddModal()
+    {
+        currentVenue = new Venue();
+        isEditing = false;
+        showModal = true;
+    }
+
+    private void ShowEditModal(Venue venue)
+    {
+        currentVenue = new Venue
+        {
+            Id = venue.Id,
+            Name = venue.Name,
+            Address = venue.Address,
+            MapUrl = venue.MapUrl
+        };
+        isEditing = true;
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        currentVenue = new Venue();
+    }
+
+    private async Task SaveVenue()
+    {
+        try
+        {
+            if (isEditing)
+            {
+                await VenueService.UpdateVenueAsync(currentVenue);
+            }
+            else
+            {
+                await VenueService.CreateVenueAsync(currentVenue);
+            }
+
+            CloseModal();
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка сохранения: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Ошибка при сохранении: {ex.Message}");
+        }
+    }
+
+    private async Task ShowDeleteConfirm(int id)
+    {
+        if (await JS.InvokeAsync<bool>("confirm", "Вы уверены, что хотите удалить эту площадку?"))
+        {
+            try
+            {
+                await VenueService.DeleteVenueAsync(id);
+                await LoadData();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка удаления: {ex.Message}");
+            }
+        }
+    }
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+}
+

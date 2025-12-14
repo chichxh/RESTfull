@@ -1,0 +1,105 @@
+﻿@page "/"
+@inject IConferenceService ConferenceService
+
+<PageTitle>Главная - Система управления конференциями</PageTitle>
+
+<div class="container-fluid">
+    <h1 class="mb-4">Система управления конференциями</h1>
+
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Обзор конференций</h3>
+                </div>
+                <div class="card-body">
+                    @if (conferences == null)
+                    {
+                        <div class="text-center">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Загрузка...</span>
+                            </div>
+                            <p class="mt-2">Загрузка данных...</p>
+                        </div>
+                    }
+                    else if (!conferences.Any())
+                    {
+                        <p class="text-muted">Конференции не найдены. Создайте первую конференцию на странице управления.</p>
+                        <a href="/conferences" class="btn btn-primary">Перейти к управлению конференциями</a>
+                    }
+                    else
+                    {
+                        <ConferenceList Conferences="@conferences"
+                                        Venues="@emptyVenues"
+                                        OnView="@HandleViewConference" />
+                        <div class="mt-3">
+                            <a href="/conferences" class="btn btn-primary">Перейти к полному управлению конференциями</a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Конференции</h5>
+                    <h2 class="text-primary">@(conferences?.Count ?? 0)</h2>
+                    <a href="/conferences" class="btn btn-sm btn-outline-primary">Управление</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Направления</h5>
+                    <a href="/directions" class="btn btn-sm btn-outline-primary">Управление</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Секции</h5>
+                    <a href="/sections" class="btn btn-sm btn-outline-primary">Управление</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Площадки</h5>
+                    <a href="/venues" class="btn btn-sm btn-outline-primary">Управление</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<Conference>? conferences;
+    private List<Venue> emptyVenues = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            conferences = await ConferenceService.GetAllConferencesAsync();
+        }
+        catch (Exception ex)
+        {
+            // В реальном приложении здесь должна быть обработка ошибок
+            Console.WriteLine($"Ошибка загрузки конференций: {ex.Message}");
+            conferences = new List<Conference>();
+        }
+    }
+
+    private void HandleViewConference(Conference conference)
+    {
+        NavigationManager.NavigateTo($"/conferences/{conference.Id}");
+    }
+
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+}

@@ -1,0 +1,116 @@
+@page "/conferences/{Id:int}"
+@inject IConferenceService ConferenceService
+@inject IVenueService VenueService
+@inject IDirectionService DirectionService
+
+<PageTitle>Конференция - @(conference?.Name ?? "Загрузка...")</PageTitle>
+
+<div class="container-fluid">
+    @if (conference == null)
+    {
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Загрузка...</span>
+            </div>
+            <p class="mt-2">Загрузка данных...</p>
+        </div>
+    }
+    else
+    {
+        <div class="mb-3">
+            <a href="/conferences" class="btn btn-outline-secondary">← Назад к списку</a>
+        </div>
+
+        <ConferenceDetail Conference="@conference" 
+                          ShowDirections="true"
+                          OnEdit="@HandleEdit" 
+                          OnViewDirection="@HandleViewDirection" />
+
+        @if (directions != null && directions.Any())
+        {
+            <div class="mt-4">
+                <h3>Научные направления</h3>
+                <DirectionSectionTree Directions="@directions"
+                                      OnViewDirection="@HandleViewDirection"
+                                      OnEditDirection="@HandleEditDirection"
+                                      OnViewSection="@HandleViewSection"
+                                      OnEditSection="@HandleEditSection"
+                                      OnDeleteSection="@HandleDeleteSection"
+                                      OnAddSection="@HandleAddSection" />
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Conference? conference;
+    private List<Direction>? directions;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            conference = await ConferenceService.GetConferenceByIdAsync(Id);
+            if (conference != null)
+            {
+                // Загружаем направления для этой конференции
+                var allDirections = await DirectionService.GetAllDirectionsAsync();
+                directions = allDirections.Where(d => d.ConferenceId == Id).ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка загрузки данных: {ex.Message}");
+        }
+    }
+
+    private void HandleEdit(Conference conference)
+    {
+        // Перенаправление на страницу редактирования
+        NavigationManager.NavigateTo($"/conferences?edit={conference.Id}");
+    }
+
+    private void HandleViewDirection(Direction direction)
+    {
+        // Можно добавить страницу просмотра направления
+        Console.WriteLine($"Просмотр направления: {direction.Name}");
+    }
+
+    private void HandleEditDirection(Direction direction)
+    {
+        NavigationManager.NavigateTo($"/directions?edit={direction.Id}");
+    }
+
+    private void HandleViewSection(Section section)
+    {
+        Console.WriteLine($"Просмотр секции: {section.Name}");
+    }
+
+    private void HandleEditSection(Section section)
+    {
+        NavigationManager.NavigateTo($"/sections?edit={section.Id}");
+    }
+
+    private async Task HandleDeleteSection(Section section)
+    {
+        // Логика удаления секции
+        Console.WriteLine($"Удаление секции: {section.Name}");
+        await LoadData();
+    }
+
+    private void HandleAddSection(Direction direction)
+    {
+        NavigationManager.NavigateTo($"/sections?directionId={direction.Id}");
+    }
+
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+}
+

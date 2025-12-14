@@ -1,0 +1,290 @@
+@page "/sections"
+@inject ISectionService SectionService
+@inject IDirectionService DirectionService
+@inject IVenueService VenueService
+
+<PageTitle>Управление секциями</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Управление секциями</h2>
+        <button class="btn btn-success" @onclick="ShowAddModal">
+            <span>+</span> Добавить секцию
+        </button>
+    </div>
+
+    @if (sections == null || !sections.Any())
+    {
+        <div class="alert alert-info">
+            <p>Секции не найдены. Создайте первую секцию.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Индекс</th>
+                        <th>Название</th>
+                        <th>Описание</th>
+                        <th>Направление</th>
+                        <th>Дата начала</th>
+                        <th>Дата окончания</th>
+                        <th>Площадка</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var sectionItem in sections)
+                    {
+                        <tr>
+                            <td>@sectionItem.Id</td>
+                            <td>@sectionItem.Index</td>
+                            <td><strong>@sectionItem.Name</strong></td>
+                            <td>@(sectionItem.Description?.Length > 50 ? sectionItem.Description.Substring(0, 50) + "..." : sectionItem.Description)</td>
+                            <td>@(sectionItem.Direction?.Name ?? "Не указано")</td>
+                            <td>@(sectionItem.StartTime?.ToString("dd.MM.yyyy HH:mm") ?? "Не указано")</td>
+                            <td>@(sectionItem.EndTime?.ToString("dd.MM.yyyy HH:mm") ?? "Не указано")</td>
+                            <td>@(sectionItem.Venue?.Name ?? "Не указано")</td>
+                            <td>
+                                <button class="btn btn-sm btn-primary" @onclick="() => ShowEditModal(sectionItem)">Редактировать</button>
+                                <button class="btn btn-sm btn-danger" @onclick="() => ShowDeleteConfirm(sectionItem.Id)">Удалить</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<!-- Модальное окно для добавления/редактирования -->
+@if (showModal)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(isEditing ? "Редактировать секцию" : "Добавить секцию")</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="@currentSection" OnValidSubmit="@SaveSection">
+                        <DataAnnotationsValidator />
+                        <div class="mb-3">
+                            <label class="form-label">Индекс</label>
+                            <InputText class="form-control" @bind-Value="currentSection.Index" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Название *</label>
+                            <InputText class="form-control" @bind-Value="currentSection.Name" />
+                            <ValidationMessage For="@(() => currentSection.Name)" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Описание</label>
+                            <InputTextArea class="form-control" @bind-Value="currentSection.Description" rows="3" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Направление *</label>
+                            <InputSelect class="form-select" @bind-Value="currentSection.DirectionId">
+                                <option value="0">Выберите направление</option>
+                                @if (directions != null)
+                                {
+                                    @foreach (var direction in directions)
+                                    {
+                                        <option value="@direction.Id">@direction.Name</option>
+                                    }
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Дата начала</label>
+                            <InputDate class="form-control" @bind-Value="startDate" />
+                            <input type="time" class="form-control mt-2" value="@startTimeString" @onchange="(ChangeEventArgs e) => startTimeString = e.Value?.ToString() ?? string.Empty" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Дата окончания</label>
+                            <InputDate class="form-control" @bind-Value="endDate" />
+                            <input type="time" class="form-control mt-2" value="@endTimeString" @onchange="(ChangeEventArgs e) => endTimeString = e.Value?.ToString() ?? string.Empty" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Площадка</label>
+                            <InputSelect class="form-select" @bind-Value="currentSection.VenueId">
+                                <option value="">Не выбрано</option>
+                                @if (venues != null)
+                                {
+                                    @foreach (var venue in venues)
+                                    {
+                                        <option value="@venue.Id">@venue.Name</option>
+                                    }
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="CloseModal">Отмена</button>
+                            <button type="submit" class="btn btn-primary">Сохранить</button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Section> sections = new();
+    private List<Direction> directions = new();
+    private List<Venue> venues = new();
+    private Section currentSection = new();
+    private bool showModal = false;
+    private bool isEditing = false;
+    private DateTime? startDate;
+    private string startTimeString = string.Empty;
+    private DateTime? endDate;
+    private string endTimeString = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            sections = await SectionService.GetAllSectionsAsync();
+            directions = await DirectionService.GetAllDirectionsAsync();
+            venues = await VenueService.GetAllVenuesAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка загрузки данных: {ex.Message}");
+            sections = new List<Section>();
+            directions = new List<Direction>();
+            venues = new List<Venue>();
+        }
+    }
+
+    private void ShowAddModal()
+    {
+        currentSection = new Section { DirectionId = 0 };
+        startDate = null;
+        startTimeString = string.Empty;
+        endDate = null;
+        endTimeString = string.Empty;
+        isEditing = false;
+        showModal = true;
+    }
+
+    private void ShowEditModal(Section section)
+    {
+        currentSection = new Section
+        {
+            Id = section.Id,
+            Index = section.Index,
+            Name = section.Name,
+            Description = section.Description,
+            DirectionId = section.DirectionId,
+            VenueId = section.VenueId
+        };
+
+        if (section.StartTime.HasValue)
+        {
+            startDate = section.StartTime.Value.Date;
+            startTimeString = section.StartTime.Value.ToString("HH:mm");
+        }
+        else
+        {
+            startDate = null;
+            startTimeString = string.Empty;
+        }
+
+        if (section.EndTime.HasValue)
+        {
+            endDate = section.EndTime.Value.Date;
+            endTimeString = section.EndTime.Value.ToString("HH:mm");
+        }
+        else
+        {
+            endDate = null;
+            endTimeString = string.Empty;
+        }
+
+        isEditing = true;
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        currentSection = new Section();
+    }
+
+    private async Task SaveSection()
+    {
+        try
+        {
+            if (startDate.HasValue && !string.IsNullOrWhiteSpace(startTimeString))
+            {
+                if (TimeSpan.TryParse(startTimeString, out var timeSpan))
+                {
+                    currentSection.StartTime = startDate.Value.Date.Add(timeSpan);
+                }
+            }
+            else
+            {
+                currentSection.StartTime = null;
+            }
+
+            if (endDate.HasValue && !string.IsNullOrWhiteSpace(endTimeString))
+            {
+                if (TimeSpan.TryParse(endTimeString, out var timeSpan))
+                {
+                    currentSection.EndTime = endDate.Value.Date.Add(timeSpan);
+                }
+            }
+            else
+            {
+                currentSection.EndTime = null;
+            }
+
+            if (isEditing)
+            {
+                await SectionService.UpdateSectionAsync(currentSection);
+            }
+            else
+            {
+                await SectionService.CreateSectionAsync(currentSection);
+            }
+
+            CloseModal();
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка сохранения: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Ошибка при сохранении: {ex.Message}");
+        }
+    }
+
+    private async Task ShowDeleteConfirm(int id)
+    {
+        if (await JS.InvokeAsync<bool>("confirm", "Вы уверены, что хотите удалить эту секцию?"))
+        {
+            try
+            {
+                await SectionService.DeleteSectionAsync(id);
+                await LoadData();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка удаления: {ex.Message}");
+            }
+        }
+    }
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+}
+

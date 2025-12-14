@@ -1,0 +1,179 @@
+@using RESTfull.Domain.Entities
+
+<div class="role-management">
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <input type="text" class="form-control" placeholder="Поиск по типу роли, названию или персоне..." 
+                   @bind="searchText" @bind:event="oninput" />
+        </div>
+        <div class="col-md-3">
+            <select class="form-select" @bind="filterAreaType">
+                <option value="@AreaType.Unknown">Все области</option>
+                <option value="@AreaType.Conference">Конференция</option>
+                <option value="@AreaType.Direction">Направление</option>
+                <option value="@AreaType.Section">Секция</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <select class="form-select" @bind="filterPersonId">
+                <option value="0">Все персоны</option>
+                @foreach (var person in Persons)
+                {
+                    <option value="@person.Id">@($"{person.LastName} {person.FirstName}")</option>
+                }
+            </select>
+        </div>
+    </div>
+
+    @if (FilteredRoles == null || !FilteredRoles.Any())
+    {
+        <div class="alert alert-info">
+            @if (Roles == null || !Roles.Any())
+            {
+                <p>Роли не найдены.</p>
+            }
+            else
+            {
+                <p>По вашему запросу ничего не найдено.</p>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Персона</th>
+                        <th>Тип роли</th>
+                        <th>Название</th>
+                        <th>Описание</th>
+                        <th>Область</th>
+                        <th>Индекс области</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var role in FilteredRoles)
+                    {
+                        <tr>
+                            <td>
+                                <strong>@($"{role.Person?.LastName} {role.Person?.FirstName} {role.Person?.MiddleName}")</strong>
+                                @if (!string.IsNullOrWhiteSpace(role.Person?.Email))
+                                {
+                                    <br /><small class="text-muted">@role.Person.Email</small>
+                                }
+                            </td>
+                            <td>@role.RoleType</td>
+                            <td>@(string.IsNullOrWhiteSpace(role.Title) ? "-" : role.Title)</td>
+                            <td>@(string.IsNullOrWhiteSpace(role.Description) ? "-" : (role.Description.Length > 50 ? role.Description.Substring(0, 50) + "..." : role.Description))</td>
+                            <td>
+                                <span class="badge bg-@(GetAreaTypeBadgeColor(role.AreaType))">
+                                    @GetAreaTypeName(role.AreaType)
+                                </span>
+                            </td>
+                            <td>@role.AreaIndex</td>
+                            <td>
+                                @if (OnView.HasDelegate)
+                                {
+                                    <button class="btn btn-sm btn-info" @onclick="() => OnView.InvokeAsync(role)">Просмотр</button>
+                                }
+                                @if (OnEdit.HasDelegate)
+                                {
+                                    <button class="btn btn-sm btn-primary" @onclick="() => OnEdit.InvokeAsync(role)">Редактировать</button>
+                                }
+                                @if (OnDelete.HasDelegate)
+                                {
+                                    <button class="btn btn-sm btn-danger" @onclick="() => OnDelete.InvokeAsync(role)">Удалить</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="mt-2">
+            <small class="text-muted">Найдено: @FilteredRoles.Count() из @(Roles?.Count() ?? 0)</small>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public IEnumerable<Role> Roles { get; set; } = Enumerable.Empty<Role>();
+
+    [Parameter]
+    public IEnumerable<Person> Persons { get; set; } = Enumerable.Empty<Person>();
+
+    [Parameter]
+    public EventCallback<Role> OnView { get; set; }
+
+    [Parameter]
+    public EventCallback<Role> OnEdit { get; set; }
+
+    [Parameter]
+    public EventCallback<Role> OnDelete { get; set; }
+
+    private string searchText = string.Empty;
+    private AreaType filterAreaType = AreaType.Unknown;
+    private int filterPersonId = 0;
+
+    private IEnumerable<Role> FilteredRoles
+    {
+        get
+        {
+            if (Roles == null) return Enumerable.Empty<Role>();
+
+            var filtered = Roles.AsEnumerable();
+
+            // Поиск по тексту
+            if (!string.IsNullOrWhiteSpace(searchText))
+            {
+                var searchLower = searchText.ToLower();
+                filtered = filtered.Where(r =>
+                    (r.RoleType?.ToLower().Contains(searchLower) ?? false) ||
+                    (r.Title?.ToLower().Contains(searchLower) ?? false) ||
+                    (r.Description?.ToLower().Contains(searchLower) ?? false) ||
+                    ($"{r.Person?.LastName} {r.Person?.FirstName} {r.Person?.MiddleName}".ToLower().Contains(searchLower))
+                );
+            }
+
+            // Фильтр по типу области
+            if (filterAreaType != AreaType.Unknown)
+            {
+                filtered = filtered.Where(r => r.AreaType == filterAreaType);
+            }
+
+            // Фильтр по персоне
+            if (filterPersonId > 0)
+            {
+                filtered = filtered.Where(r => r.PersonId == filterPersonId);
+            }
+
+            return filtered.OrderBy(r => r.Person?.LastName).ThenBy(r => r.RoleType);
+        }
+    }
+
+    private string GetAreaTypeName(AreaType areaType)
+    {
+        return areaType switch
+        {
+            AreaType.Conference => "Конференция",
+            AreaType.Direction => "Направление",
+            AreaType.Section => "Секция",
+            _ => "Не указано"
+        };
+    }
+
+    private string GetAreaTypeBadgeColor(AreaType areaType)
+    {
+        return areaType switch
+        {
+            AreaType.Conference => "primary",
+            AreaType.Direction => "success",
+            AreaType.Section => "info",
+            _ => "secondary"
+        };
+    }
+}
+

@@ -1,0 +1,131 @@
+@using RESTfull.Domain.Entities
+
+@if (Conference == null)
+{
+    <div class="alert alert-warning">Конференция не выбрана</div>
+}
+else
+{
+    <div class="conference-detail">
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h3 class="mb-0">@Conference.Name</h3>
+                    @if (OnEdit.HasDelegate)
+                    {
+                        <button class="btn btn-primary" @onclick="() => OnEdit.InvokeAsync(Conference)">Редактировать</button>
+                    }
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <h5>Основная информация</h5>
+                        <table class="table table-borderless">
+                            <tr>
+                                <th width="150">Индекс:</th>
+                                <td>@Conference.Index</td>
+                            </tr>
+                            <tr>
+                                <th>Название:</th>
+                                <td><strong>@Conference.Name</strong></td>
+                            </tr>
+                            <tr>
+                                <th>Описание:</th>
+                                <td>@(string.IsNullOrWhiteSpace(Conference.Description) ? "Не указано" : Conference.Description)</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h5>Время и место</h5>
+                        <table class="table table-borderless">
+                            <tr>
+                                <th width="150">Дата начала:</th>
+                                <td>@(Conference.StartTime?.ToString("dd.MM.yyyy HH:mm") ?? "Не указано")</td>
+                            </tr>
+                            <tr>
+                                <th>Дата окончания:</th>
+                                <td>@(Conference.EndTime?.ToString("dd.MM.yyyy HH:mm") ?? "Не указано")</td>
+                            </tr>
+                            <tr>
+                                <th>Площадка:</th>
+                                <td>
+                                    @if (Conference.Venue != null)
+                                    {
+                                        <div>
+                                            <strong>@Conference.Venue.Name</strong><br />
+                                            @if (!string.IsNullOrWhiteSpace(Conference.Venue.Address))
+                                            {
+                                                <small class="text-muted">@Conference.Venue.Address</small><br />
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(Conference.Venue.MapUrl))
+                                            {
+                                                <a href="@Conference.Venue.MapUrl" target="_blank" class="btn btn-sm btn-outline-info mt-1">Открыть карту</a>
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Не указано</span>
+                                    }
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                @if (ShowDirections && Conference.Directions != null && Conference.Directions.Any())
+                {
+                    <div class="mt-4">
+                        <h5>Научные направления (@Conference.Directions.Count)</h5>
+                        <div class="list-group">
+                            @foreach (var direction in Conference.Directions)
+                            {
+                                <div class="list-group-item">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <h6 class="mb-1">@direction.Index - @direction.Name</h6>
+                                            @if (!string.IsNullOrWhiteSpace(direction.Description))
+                                            {
+                                                <p class="mb-1 text-muted">@direction.Description</p>
+                                            }
+                                            <small>
+                                                @if (direction.StartTime.HasValue || direction.EndTime.HasValue)
+                                                {
+                                                    <span>@(direction.StartTime?.ToString("dd.MM.yyyy HH:mm") ?? "?") - @(direction.EndTime?.ToString("dd.MM.yyyy HH:mm") ?? "?")</span>
+                                                }
+                                                @if (direction.Venue != null)
+                                                {
+                                                    <span class="ms-2">📍 @direction.Venue.Name</span>
+                                                }
+                                            </small>
+                                        </div>
+                                        @if (OnViewDirection.HasDelegate)
+                                        {
+                                            <button class="btn btn-sm btn-outline-primary" @onclick="() => OnViewDirection.InvokeAsync(direction)">Подробнее</button>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Conference? Conference { get; set; }
+
+    [Parameter]
+    public bool ShowDirections { get; set; } = true;
+
+    [Parameter]
+    public EventCallback<Conference> OnEdit { get; set; }
+
+    [Parameter]
+    public EventCallback<Direction> OnViewDirection { get; set; }
+}
+

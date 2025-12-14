@@ -1,0 +1,290 @@
+@page "/directions"
+@inject IDirectionService DirectionService
+@inject IConferenceService ConferenceService
+@inject IVenueService VenueService
+
+<PageTitle>Управление научными направлениями</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Управление научными направлениями</h2>
+        <button class="btn btn-success" @onclick="ShowAddModal">
+            <span>+</span> Добавить направление
+        </button>
+    </div>
+
+    @if (directions == null || !directions.Any())
+    {
+        <div class="alert alert-info">
+            <p>Направления не найдены. Создайте первое направление.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Индекс</th>
+                        <th>Название</th>
+                        <th>Описание</th>
+                        <th>Конференция</th>
+                        <th>Дата начала</th>
+                        <th>Дата окончания</th>
+                        <th>Площадка</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var direction in directions)
+                    {
+                        <tr>
+                            <td>@direction.Id</td>
+                            <td>@direction.Index</td>
+                            <td><strong>@direction.Name</strong></td>
+                            <td>@(direction.Description?.Length > 50 ? direction.Description.Substring(0, 50) + "..." : direction.Description)</td>
+                            <td>@(direction.Conference?.Name ?? "Не указано")</td>
+                            <td>@(direction.StartTime?.ToString("dd.MM.yyyy HH:mm") ?? "Не указано")</td>
+                            <td>@(direction.EndTime?.ToString("dd.MM.yyyy HH:mm") ?? "Не указано")</td>
+                            <td>@(direction.Venue?.Name ?? "Не указано")</td>
+                            <td>
+                                <button class="btn btn-sm btn-primary" @onclick="() => ShowEditModal(direction)">Редактировать</button>
+                                <button class="btn btn-sm btn-danger" @onclick="() => ShowDeleteConfirm(direction.Id)">Удалить</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<!-- Модальное окно для добавления/редактирования -->
+@if (showModal)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(isEditing ? "Редактировать направление" : "Добавить направление")</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="@currentDirection" OnValidSubmit="@SaveDirection">
+                        <DataAnnotationsValidator />
+                        <div class="mb-3">
+                            <label class="form-label">Индекс</label>
+                            <InputText class="form-control" @bind-Value="currentDirection.Index" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Название *</label>
+                            <InputText class="form-control" @bind-Value="currentDirection.Name" />
+                            <ValidationMessage For="@(() => currentDirection.Name)" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Описание</label>
+                            <InputTextArea class="form-control" @bind-Value="currentDirection.Description" rows="3" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Конференция *</label>
+                            <InputSelect class="form-select" @bind-Value="currentDirection.ConferenceId">
+                                <option value="0">Выберите конференцию</option>
+                                @if (conferences != null)
+                                {
+                                    @foreach (var conference in conferences)
+                                    {
+                                        <option value="@conference.Id">@conference.Name</option>
+                                    }
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Дата начала</label>
+                            <InputDate class="form-control" @bind-Value="startDate" />
+                            <input type="time" class="form-control mt-2" value="@startTimeString" @onchange="(ChangeEventArgs e) => startTimeString = e.Value?.ToString() ?? string.Empty" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Дата окончания</label>
+                            <InputDate class="form-control" @bind-Value="endDate" />
+                            <input type="time" class="form-control mt-2" value="@endTimeString" @onchange="(ChangeEventArgs e) => endTimeString = e.Value?.ToString() ?? string.Empty" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Площадка</label>
+                            <InputSelect class="form-select" @bind-Value="currentDirection.VenueId">
+                                <option value="">Не выбрано</option>
+                                @if (venues != null)
+                                {
+                                    @foreach (var venue in venues)
+                                    {
+                                        <option value="@venue.Id">@venue.Name</option>
+                                    }
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="CloseModal">Отмена</button>
+                            <button type="submit" class="btn btn-primary">Сохранить</button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Direction> directions = new();
+    private List<Conference> conferences = new();
+    private List<Venue> venues = new();
+    private Direction currentDirection = new();
+    private bool showModal = false;
+    private bool isEditing = false;
+    private DateTime? startDate;
+    private string startTimeString = string.Empty;
+    private DateTime? endDate;
+    private string endTimeString = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            directions = await DirectionService.GetAllDirectionsAsync();
+            conferences = await ConferenceService.GetAllConferencesAsync();
+            venues = await VenueService.GetAllVenuesAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка загрузки данных: {ex.Message}");
+            directions = new List<Direction>();
+            conferences = new List<Conference>();
+            venues = new List<Venue>();
+        }
+    }
+
+    private void ShowAddModal()
+    {
+        currentDirection = new Direction { ConferenceId = 0 };
+        startDate = null;
+        startTimeString = string.Empty;
+        endDate = null;
+        endTimeString = string.Empty;
+        isEditing = false;
+        showModal = true;
+    }
+
+    private void ShowEditModal(Direction direction)
+    {
+        currentDirection = new Direction
+        {
+            Id = direction.Id,
+            Index = direction.Index,
+            Name = direction.Name,
+            Description = direction.Description,
+            ConferenceId = direction.ConferenceId,
+            VenueId = direction.VenueId
+        };
+
+        if (direction.StartTime.HasValue)
+        {
+            startDate = direction.StartTime.Value.Date;
+            startTimeString = direction.StartTime.Value.ToString("HH:mm");
+        }
+        else
+        {
+            startDate = null;
+            startTimeString = string.Empty;
+        }
+
+        if (direction.EndTime.HasValue)
+        {
+            endDate = direction.EndTime.Value.Date;
+            endTimeString = direction.EndTime.Value.ToString("HH:mm");
+        }
+        else
+        {
+            endDate = null;
+            endTimeString = string.Empty;
+        }
+
+        isEditing = true;
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        currentDirection = new Direction();
+    }
+
+    private async Task SaveDirection()
+    {
+        try
+        {
+            if (startDate.HasValue && !string.IsNullOrWhiteSpace(startTimeString))
+            {
+                if (TimeSpan.TryParse(startTimeString, out var timeSpan))
+                {
+                    currentDirection.StartTime = startDate.Value.Date.Add(timeSpan);
+                }
+            }
+            else
+            {
+                currentDirection.StartTime = null;
+            }
+
+            if (endDate.HasValue && !string.IsNullOrWhiteSpace(endTimeString))
+            {
+                if (TimeSpan.TryParse(endTimeString, out var timeSpan))
+                {
+                    currentDirection.EndTime = endDate.Value.Date.Add(timeSpan);
+                }
+            }
+            else
+            {
+                currentDirection.EndTime = null;
+            }
+
+            if (isEditing)
+            {
+                await DirectionService.UpdateDirectionAsync(currentDirection);
+            }
+            else
+            {
+                await DirectionService.CreateDirectionAsync(currentDirection);
+            }
+
+            CloseModal();
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка сохранения: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Ошибка при сохранении: {ex.Message}");
+        }
+    }
+
+    private async Task ShowDeleteConfirm(int id)
+    {
+        if (await JS.InvokeAsync<bool>("confirm", "Вы уверены, что хотите удалить это направление?"))
+        {
+            try
+            {
+                await DirectionService.DeleteDirectionAsync(id);
+                await LoadData();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка удаления: {ex.Message}");
+            }
+        }
+    }
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+}
+

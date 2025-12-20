@@ -73,7 +73,7 @@
                             <td>@(conference.Description?.Length > 50 ? conference.Description.Substring(0, 50) + "..." : conference.Description)</td>
                             <td>@(conference.StartTime?.ToString("dd.MM.yyyy HH:mm") ?? "Не указано")</td>
                             <td>@(conference.EndTime?.ToString("dd.MM.yyyy HH:mm") ?? "Не указано")</td>
-                            <td>@(conference.Venue?.Name ?? "Не указано")</td>
+                            <td>@GetVenueName(conference.VenueId)</td>
                             <td>
                                 @if (OnView.HasDelegate)
                                 {
@@ -126,6 +126,16 @@
     private const string StartTimeColumnName = "StartTime";
 
     private IEnumerable<Venue> venues => Venues ?? Enumerable.Empty<Venue>();
+
+    private string GetVenueName(int? venueId)
+    {
+        if (!venueId.HasValue)
+        {
+            return "Не указано";
+        }
+
+        return venues.FirstOrDefault(venue => venue.Id == venueId.Value)?.Name ?? "Не указано";
+    }
 
     private IEnumerable<Conference> FilteredConferences
     {
@@ -202,4 +212,3 @@
         return sortAscending ? "↑" : "↓";
     }
 }
-

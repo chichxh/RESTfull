@@ -44,10 +44,10 @@
                             <td>@sectionItem.Index</td>
                             <td><strong>@sectionItem.Name</strong></td>
                             <td>@(sectionItem.Description?.Length > 50 ? sectionItem.Description.Substring(0, 50) + "..." : sectionItem.Description)</td>
-                            <td>@(sectionItem.Direction?.Name ?? "Не указано")</td>
+                            <td>@GetDirectionName(sectionItem.DirectionId)</td>
                             <td>@(sectionItem.StartTime?.ToString("dd.MM.yyyy HH:mm") ?? "Не указано")</td>
                             <td>@(sectionItem.EndTime?.ToString("dd.MM.yyyy HH:mm") ?? "Не указано")</td>
-                            <td>@(sectionItem.Venue?.Name ?? "Не указано")</td>
+                            <td>@GetVenueName(sectionItem.VenueId)</td>
                             <td>
                                 <button class="btn btn-sm btn-primary" @onclick="() => ShowEditModal(sectionItem)">Редактировать</button>
                                 <button class="btn btn-sm btn-danger" @onclick="() => ShowDeleteConfirm(sectionItem.Id)">Удалить</button>
@@ -144,6 +144,21 @@
     private string startTimeString = string.Empty;
     private DateTime? endDate;
     private string endTimeString = string.Empty;
+
+    private string GetDirectionName(int directionId)
+    {
+        return directions.FirstOrDefault(direction => direction.Id == directionId)?.Name ?? "Не указано";
+    }
+
+    private string GetVenueName(int? venueId)
+    {
+        if (!venueId.HasValue)
+        {
+            return "Не указано";
+        }
+
+        return venues.FirstOrDefault(venue => venue.Id == venueId.Value)?.Name ?? "Не указано";
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -287,4 +302,3 @@
 
     [Inject] private IJSRuntime JS { get; set; } = default!;
 }
-
